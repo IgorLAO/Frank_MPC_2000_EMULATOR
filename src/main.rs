@@ -1,6 +1,8 @@
 mod audio;
+mod recording;
 
 use audio::AudioEngine;
+use recording::RecordingEngine;
 use eframe::egui;
 use egui::{Color32, CornerRadius, Stroke, StrokeKind, Vec2};
 use rodio::Sink;
@@ -26,6 +28,7 @@ struct MpcApp {
     pad_samples: [Option<Arc<Vec<u8>>>; 16],
     /// Per-pad sink for restart semantics
     pad_sinks: Vec<Option<Sink>>,
+    recorder: RecordingEngine,
 }
 
 impl MpcApp {
@@ -36,6 +39,7 @@ impl MpcApp {
             audio,
             pad_samples: Default::default(),
             pad_sinks,
+            recorder: RecordingEngine::new(),
         }
     }
 
