@@ -96,13 +96,15 @@ impl eframe::App for MpcApp {
                             }
 
                             if ui.is_rect_visible(rect) {
-                                let bg_color = if has_sample {
+                                let bg_color = if is_playing {
+                                    Color32::from_rgb(200, 160, 40) // bright highlight while playing
+                                } else if has_sample {
                                     Color32::from_rgb(60, 80, 60)
                                 } else {
                                     Color32::from_rgb(60, 60, 80)
                                 };
                                 let border_color = if is_playing {
-                                    Color32::from_rgb(200, 200, 80)
+                                    Color32::from_rgb(255, 220, 80)
                                 } else {
                                     Color32::from_rgb(120, 120, 160)
                                 };
