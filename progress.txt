@@ -1,3 +1,12 @@
+## 2026-04-03 - US-007
+- What was implemented: Keyboard keys Q/W/E/R (pads 1-4), A/S/D/F (5-8), Z/X/C/V (9-12), 1/2/3/4 (13-16) now trigger pads. Key labels shown on pads above the pad number.
+- Files changed: src/main.rs
+- **Learnings for future iterations:**
+  - Use `egui::Key::Q` etc. and `egui::Key::Num1` through `egui::Key::Num4` for digit keys
+  - Collect key presses inside `ctx.input(|i| { ... })` closure; push to triggered Vec to avoid borrow issues
+  - `PAD_KEY_LABELS` const array defined outside impl block for pad display labels
+---
+
 ## Codebase Patterns
 - Rust 2024 edition with eframe 0.31, egui 0.31, rodio 0.20, cpal 0.15
 - Build requires: pkg-config, libasound2-dev, build-essential (gcc)
