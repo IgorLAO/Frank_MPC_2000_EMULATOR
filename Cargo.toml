@@ -1,0 +1,10 @@
+[package]
+name = "mpc_emulator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.31"
+egui = "0.31"
+rodio = "0.20"
+cpal = "0.15"
