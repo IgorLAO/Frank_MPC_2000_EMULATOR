@@ -63,16 +63,43 @@ impl MpcApp {
             false
         }
     }
+
+    fn stop_all(&mut self) {
+        for sink_opt in &self.pad_sinks {
+            if let Some(sink) = sink_opt {
+                sink.stop();
+            }
+        }
+    }
 }
 
 impl eframe::App for MpcApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Collect pads to trigger (to avoid borrow issues)
         let mut triggered: Vec<usize> = Vec::new();
+        let mut stop_all = false;
+
+        // Space key triggers Stop All
+        if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+            stop_all = true;
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("MPC Emulator");
-            ui.add_space(16.0);
+            ui.add_space(8.0);
+
+            if ui
+                .add(
+                    egui::Button::new("■  Stop All")
+                        .fill(Color32::from_rgb(160, 40, 40))
+                        .min_size(Vec2::new(120.0, 32.0)),
+                )
+                .clicked()
+            {
+                stop_all = true;
+            }
+
+            ui.add_space(8.0);
 
             let pad_size = Vec2::new(100.0, 100.0);
             let spacing = 8.0;
@@ -132,8 +159,12 @@ impl eframe::App for MpcApp {
                 });
         });
 
-        for pad_idx in triggered {
-            self.trigger_pad(pad_idx);
+        if stop_all {
+            self.stop_all();
+        } else {
+            for pad_idx in triggered {
+                self.trigger_pad(pad_idx);
+            }
         }
 
         // Request repaint for active state updates
