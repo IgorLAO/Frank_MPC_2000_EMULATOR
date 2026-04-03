@@ -1,3 +1,15 @@
+## 2026-04-03 - US-008
+- What was implemented: RecordingEngine in src/recording.rs — starts/stops cpal default input capture, collects f32 samples in Arc<Mutex<Vec<f32>>>, encodes to WAV (16-bit PCM) on stop(). Added `recorder: RecordingEngine` field to MpcApp.
+- Files changed: src/recording.rs (new), src/main.rs
+- **Learnings for future iterations:**
+  - cpal 0.15 `build_input_stream` signature: `(config: &StreamConfig, data_cb, err_cb, timeout: Option<Duration>)`
+  - `SupportedStreamConfig::config()` gives the `StreamConfig` needed for the stream builder
+  - `SampleFormat` is non-exhaustive; match F32/I16/U16 with `_ => false` fallback
+  - `RecordingEngine._stream = None` dropping the Stream halts capture immediately
+  - `is_recording()` method uses `Arc<AtomicBool>` readable from any thread
+  - `cpal::Stream` is not Send on all platforms; keep it on the main thread
+---
+
 ## 2026-04-03 - US-007
 - What was implemented: Keyboard keys Q/W/E/R (pads 1-4), A/S/D/F (5-8), Z/X/C/V (9-12), 1/2/3/4 (13-16) now trigger pads. Key labels shown on pads above the pad number.
 - Files changed: src/main.rs
