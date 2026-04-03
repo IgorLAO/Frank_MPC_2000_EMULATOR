@@ -31,6 +31,8 @@ struct MpcApp {
     recorder: RecordingEngine,
     /// Buffer from the last completed recording, waiting to be assigned to a pad
     pending_record_buffer: Option<Arc<Vec<u8>>>,
+    /// Time (in seconds) when each pad's long-press began; None if not held
+    pad_press_start: [Option<f64>; 16],
 }
 
 impl MpcApp {
@@ -43,6 +45,7 @@ impl MpcApp {
             pad_sinks,
             recorder: RecordingEngine::new(),
             pending_record_buffer: None,
+            pad_press_start: [None; 16],
         }
     }
 
@@ -203,14 +206,44 @@ impl eframe::App for MpcApp {
                         for col in 0..4 {
                             let pad_idx = row * 4 + col;
                             let pad_num = pad_idx + 1;
-                            let has_sample = self.pad_samples[pad_idx].is_some();
                             let is_playing = self.is_pad_playing(pad_idx);
                             let pending_assign = self.pending_record_buffer.is_some();
 
                             let (rect, response) =
-                                ui.allocate_exact_size(pad_size, egui::Sense::click());
+                                ui.allocate_exact_size(pad_size, egui::Sense::click_and_drag());
 
-                            if response.clicked() {
+                            let now = ctx.input(|i| i.time);
+
+                            // Track long-press: start timer when pointer goes down
+                            if response.is_pointer_button_down_on() {
+                                if self.pad_press_start[pad_idx].is_none() {
+                                    self.pad_press_start[pad_idx] = Some(now);
+                                }
+                            } else {
+                                self.pad_press_start[pad_idx] = None;
+                            }
+
+                            let hold_secs = self.pad_press_start[pad_idx]
+                                .map(|start| (now - start) as f32)
+                                .unwrap_or(0.0);
+                            let hold_progress = (hold_secs / 3.0).min(1.0);
+                            let long_press_complete = hold_progress >= 1.0;
+
+                            // Clear sample when long press completes
+                            if long_press_complete {
+                                if self.pad_samples[pad_idx].is_some() {
+                                    self.pad_samples[pad_idx] = None;
+                                    if let Some(sink) = &self.pad_sinks[pad_idx] {
+                                        sink.stop();
+                                    }
+                                    self.pad_sinks[pad_idx] = None;
+                                }
+                                self.pad_press_start[pad_idx] = None;
+                            }
+
+                            let has_sample = self.pad_samples[pad_idx].is_some();
+
+                            if response.clicked() && !long_press_complete {
                                 if pending_assign {
                                     // Assign recorded buffer to this pad
                                     if let Some(buf) = self.pending_record_buffer.take() {
@@ -224,6 +257,8 @@ impl eframe::App for MpcApp {
                             if ui.is_rect_visible(rect) {
                                 let bg_color = if is_playing {
                                     Color32::from_rgb(200, 160, 40) // bright highlight while playing
+                                } else if hold_progress > 0.0 {
+                                    Color32::from_rgb(120, 40, 40) // darkening during long-press
                                 } else if pending_assign && !has_sample {
                                     Color32::from_rgb(40, 60, 100) // assignable empty pad hint
                                 } else if has_sample {
@@ -233,6 +268,8 @@ impl eframe::App for MpcApp {
                                 };
                                 let border_color = if is_playing {
                                     Color32::from_rgb(255, 220, 80)
+                                } else if hold_progress > 0.0 {
+                                    Color32::from_rgb(255, 80, 80)
                                 } else if pending_assign {
                                     Color32::from_rgb(100, 160, 255)
                                 } else {
@@ -247,6 +284,23 @@ impl eframe::App for MpcApp {
                                     Stroke::new(2.0, border_color),
                                     StrokeKind::Outside,
                                 );
+
+                                // Long-press progress fill at the bottom of the pad
+                                if hold_progress > 0.0 {
+                                    let bar_height = 6.0;
+                                    let bar_rect = egui::Rect::from_min_max(
+                                        egui::pos2(rect.min.x, rect.max.y - bar_height),
+                                        egui::pos2(
+                                            rect.min.x + rect.width() * hold_progress,
+                                            rect.max.y,
+                                        ),
+                                    );
+                                    painter.rect_filled(
+                                        bar_rect,
+                                        CornerRadius::same(3),
+                                        Color32::from_rgb(255, 80, 80),
+                                    );
+                                }
 
                                 painter.text(
                                     rect.center() - Vec2::new(0.0, 8.0),
