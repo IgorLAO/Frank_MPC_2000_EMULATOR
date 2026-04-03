@@ -1,3 +1,14 @@
+## 2026-04-03 - US-009
+- What was implemented: Record button ("⏺ Record (R)") in UI toolbar toggles recording start/stop. R key also toggles. Blinking red dot indicator shown while recording. After stopping, a yellow hint message prompts user to click a pad to assign the buffer. Clicking a pad during pending-assign mode stores the WAV buffer and shows a filled dot (●) in the pad label. Pads with pending assignment show a blue border highlight.
+- Files changed: src/main.rs
+- **Learnings for future iterations:**
+  - R key conflict with US-007 pad mapping — R was removed from pad triggers and reassigned to recording toggle
+  - `ctx.input(|i| i.time)` gives elapsed seconds as f64; use `(t * 2.0) as u64 % 2 == 0` for 0.5 Hz blink
+  - `self.pending_record_buffer.take()` cleanly clears the pending state when assigned
+  - Pad 3 (index 3) now has "-" in PAD_KEY_LABELS since R is taken by recording
+  - encode_wav returns empty Vec<u8> if no samples captured — check `!wav.is_empty()` before setting pending buffer
+---
+
 ## 2026-04-03 - US-008
 - What was implemented: RecordingEngine in src/recording.rs — starts/stops cpal default input capture, collects f32 samples in Arc<Mutex<Vec<f32>>>, encodes to WAV (16-bit PCM) on stop(). Added `recorder: RecordingEngine` field to MpcApp.
 - Files changed: src/recording.rs (new), src/main.rs
