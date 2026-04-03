@@ -16,7 +16,22 @@ impl AudioEngine {
         })
     }
 
-    /// Play audio data immediately. Supports polyphony by creating a new Sink per call.
+    /// Create a new Sink for a pad. The caller holds the Sink to allow stopping/restarting.
+    pub fn create_sink(&self) -> Option<Sink> {
+        Sink::try_new(&self.stream_handle).ok()
+    }
+
+    /// Play audio data immediately into the given sink.
+    pub fn play_into_sink(&self, sink: &Sink, data: Arc<Vec<u8>>) {
+        sink.clear();
+        let cursor = Cursor::new((*data).clone());
+        if let Ok(source) = Decoder::new(cursor) {
+            sink.append(source);
+            sink.play();
+        }
+    }
+
+    /// Play audio data in a fire-and-forget sink (for polyphony without restart semantics).
     pub fn play_sample(&self, data: Arc<Vec<u8>>) {
         let sink = match Sink::try_new(&self.stream_handle) {
             Ok(s) => s,
@@ -25,7 +40,7 @@ impl AudioEngine {
         let cursor = Cursor::new((*data).clone());
         if let Ok(source) = Decoder::new(cursor) {
             sink.append(source);
-            sink.detach(); // let it play without blocking
+            sink.detach();
         }
     }
 }
