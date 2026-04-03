@@ -1,3 +1,5 @@
+mod audio;
+
 use eframe::egui;
 use egui::{Color32, CornerRadius, Stroke, StrokeKind, Vec2};
 
