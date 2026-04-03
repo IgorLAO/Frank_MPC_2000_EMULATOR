@@ -36,6 +36,8 @@ struct MpcApp {
     /// Time (in seconds) when each pad's long-press began; None if not held
     pad_press_start: [Option<f64>; 16],
     loop_recorder: LoopRecorder,
+    /// Index of the currently selected loop in loop_recorder.loops
+    selected_loop: Option<usize>,
 }
 
 impl MpcApp {
@@ -50,6 +52,7 @@ impl MpcApp {
             pending_record_buffer: None,
             pad_press_start: [None; 16],
             loop_recorder: LoopRecorder::new(),
+            selected_loop: None,
         }
     }
 
@@ -139,6 +142,36 @@ impl eframe::App for MpcApp {
                 }
             }
         });
+
+        egui::SidePanel::right("loop_sidebar")
+            .min_width(160.0)
+            .max_width(200.0)
+            .show(ctx, |ui| {
+                ui.heading("Loops");
+                ui.add_space(4.0);
+                if self.loop_recorder.loops.is_empty() {
+                    ui.colored_label(Color32::from_rgb(140, 140, 140), "No loops recorded");
+                } else {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        for (idx, lp) in self.loop_recorder.loops.iter().enumerate() {
+                            let is_selected = self.selected_loop == Some(idx);
+                            let bg = if is_selected {
+                                Color32::from_rgb(60, 120, 200)
+                            } else {
+                                Color32::from_rgb(50, 50, 70)
+                            };
+                            let response = ui.add(
+                                egui::Button::new(&lp.name)
+                                    .fill(bg)
+                                    .min_size(Vec2::new(ui.available_width(), 28.0)),
+                            );
+                            if response.clicked() {
+                                self.selected_loop = Some(idx);
+                            }
+                        }
+                    });
+                }
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("MPC Emulator");
