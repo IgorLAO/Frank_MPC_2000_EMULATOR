@@ -1,7 +1,9 @@
 mod audio;
+mod loop_recorder;
 mod recording;
 
 use audio::AudioEngine;
+use loop_recorder::LoopRecorder;
 use recording::RecordingEngine;
 use eframe::egui;
 use egui::{Color32, CornerRadius, Stroke, StrokeKind, Vec2};
@@ -33,6 +35,7 @@ struct MpcApp {
     pending_record_buffer: Option<Arc<Vec<u8>>>,
     /// Time (in seconds) when each pad's long-press began; None if not held
     pad_press_start: [Option<f64>; 16],
+    loop_recorder: LoopRecorder,
 }
 
 impl MpcApp {
@@ -46,6 +49,7 @@ impl MpcApp {
             recorder: RecordingEngine::new(),
             pending_record_buffer: None,
             pad_press_start: [None; 16],
+            loop_recorder: LoopRecorder::new(),
         }
     }
 
@@ -93,6 +97,7 @@ impl eframe::App for MpcApp {
         let mut triggered: Vec<usize> = Vec::new();
         let mut stop_all = false;
         let mut toggle_record = false;
+        let mut toggle_loop_record = false;
 
         // Space key triggers Stop All
         if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
@@ -102,6 +107,11 @@ impl eframe::App for MpcApp {
         // R key toggles recording (takes priority over pad trigger)
         if ctx.input(|i| i.key_pressed(egui::Key::R)) {
             toggle_record = true;
+        }
+
+        // L key toggles loop recording
+        if ctx.input(|i| i.key_pressed(egui::Key::L)) {
+            toggle_loop_record = true;
         }
 
         // Keyboard pad triggers (R removed — used for recording)
@@ -177,6 +187,47 @@ impl eframe::App for MpcApp {
                             dot_rect.center(),
                             8.0,
                             Color32::from_rgb(255, 50, 50),
+                        );
+                    } else {
+                        ui.add_space(16.0);
+                    }
+                }
+
+                ui.add_space(12.0);
+
+                let is_loop_rec = self.loop_recorder.is_recording();
+                let loop_rec_label = if is_loop_rec {
+                    "⏹  Stop Loop (L)"
+                } else {
+                    "⏺  Loop Rec (L)"
+                };
+                let loop_rec_color = if is_loop_rec {
+                    Color32::from_rgb(60, 120, 180)
+                } else {
+                    Color32::from_rgb(100, 100, 100)
+                };
+                if ui
+                    .add(
+                        egui::Button::new(loop_rec_label)
+                            .fill(loop_rec_color)
+                            .min_size(Vec2::new(150.0, 32.0)),
+                    )
+                    .clicked()
+                {
+                    toggle_loop_record = true;
+                }
+
+                // Blinking blue indicator while loop recording
+                if is_loop_rec {
+                    let t = ctx.input(|i| i.time);
+                    let blink_on = (t * 2.0) as u64 % 2 == 0;
+                    if blink_on {
+                        let (dot_rect, _) =
+                            ui.allocate_exact_size(Vec2::new(16.0, 16.0), egui::Sense::hover());
+                        ui.painter().circle_filled(
+                            dot_rect.center(),
+                            8.0,
+                            Color32::from_rgb(80, 160, 255),
                         );
                     } else {
                         ui.add_space(16.0);
@@ -339,10 +390,19 @@ impl eframe::App for MpcApp {
             }
         }
 
+        if toggle_loop_record {
+            if self.loop_recorder.is_recording() {
+                self.loop_recorder.stop();
+            } else {
+                self.loop_recorder.start();
+            }
+        }
+
         if stop_all {
             self.stop_all();
         } else {
             for pad_idx in triggered {
+                self.loop_recorder.record_event(pad_idx);
                 self.trigger_pad(pad_idx);
             }
         }
