@@ -1,3 +1,14 @@
+## 2026-04-03 - US-011
+- What was implemented: `LoopRecorder` struct in `src/loop_recorder.rs` — records `(pad_index, elapsed_ms)` events using `std::time::Instant` for timing. `start()` begins capture, `stop()` finalizes a named `Loop` (loop#1, loop#2, ...) and pushes to `self.loops`. `record_event(pad_idx)` called from `main.rs` whenever a pad is triggered. L key and "Loop Rec (L)" button toggle loop recording. Blinking blue indicator shown while loop recording is active. Events recorded for both keyboard and mouse pad triggers.
+- Files changed: src/loop_recorder.rs (new), src/main.rs
+- **Learnings for future iterations:**
+  - `std::time::Instant` used for loop event timing (accurate relative elapsed_ms per loop)
+  - `loop_recorder.record_event(pad_idx)` called before `trigger_pad(pad_idx)` in the triggered loop
+  - L key has no conflict with existing key mappings (Q/W/E/A/S/D/F/Z/X/C/V/1/2/3/4/R/Space)
+  - `self.loops` Vec holds all completed loops; index+1 gives sequential loop number
+  - Fields/methods are pub to allow access from main.rs for upcoming US-012/013/014
+---
+
 ## 2026-04-03 - US-010
 - What was implemented: Long-press pad 3 seconds to clear its assigned sample. `pad_press_start: [Option<f64>; 16]` tracks press start time. `Sense::click_and_drag()` used instead of `Sense::click()` to detect ongoing pointer-down state via `response.is_pointer_button_down_on()`. Red progress bar fills at bottom of pad over 3s. Border/bg shift to red while holding. On completion, sample and sink are cleared; pad returns to empty state. Short clicks (<3s) still trigger normal behavior.
 - Files changed: src/main.rs
