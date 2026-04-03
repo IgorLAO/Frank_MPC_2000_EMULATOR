@@ -1,0 +1,27 @@
+## Codebase Patterns
+- Rust 2024 edition with eframe 0.31, egui 0.31, rodio 0.20, cpal 0.15
+- Build requires: pkg-config, libasound2-dev, build-essential (gcc)
+- Use `cargo check` for typecheck, `cargo build` to compile
+- eframe::run_native takes a closure returning `Ok(Box::new(App))`
+- egui::CentralPanel::default().show() for main UI layout
+
+---
+
+## 2026-04-03 - US-006
+- What was implemented: Stop All button (red, "■ Stop All") added to UI above the pad grid; Space key also triggers stop_all; stop_all() method stops all pad sinks immediately; pad active states reset on next repaint since stopped sinks become empty.
+- Files changed: src/main.rs
+- **Learnings for future iterations:**
+  - Use `ctx.input(|i| i.key_pressed(egui::Key::Space))` for Space key detection in egui
+  - `egui::Button::new(...).fill(color).min_size(size)` for styled buttons
+  - `sink.stop()` immediately stops a rodio Sink; `sink.empty()` returns true after stop so visual state updates automatically on next frame
+---
+
+## 2026-04-03 - US-001
+- What was implemented: Initialized Rust project with Cargo.toml including eframe, egui, rodio, cpal. Created basic eframe window with MpcApp struct implementing eframe::App.
+- Files changed: Cargo.toml, src/main.rs, Cargo.lock
+- **Learnings for future iterations:**
+  - System requires: apt install build-essential pkg-config libasound2-dev
+  - eframe 0.31 uses `eframe::run_native` with closure returning `Ok(Box::new(...))`
+  - Rust 2024 edition is available (Rust 1.94.1)
+  - `cargo check` passes in ~20s after first full compile
+---

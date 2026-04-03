@@ -1,0 +1,219 @@
+{
+  "project": "MPC Emulator",
+  "branchName": "ralph/mpc-emulator",
+  "description": "Rust desktop MPC2000-inspired pad sampler with 4x4 grid, audio playback, recording, and loop sequencing",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Project scaffolding and dependencies",
+      "description": "As a developer, I need the Rust project initialized with the correct dependencies so that all subsequent stories have a working build foundation.",
+      "acceptanceCriteria": [
+        "Cargo.toml includes egui (eframe), rodio, and cpal as dependencies",
+        "main.rs creates a basic eframe/egui window that opens and closes cleanly",
+        "cargo build succeeds with no errors",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "4x4 pad grid UI",
+      "description": "As a user, I want to see a 4x4 grid of 16 labeled pads so that I have a visual interface to interact with.",
+      "acceptanceCriteria": [
+        "16 pads rendered in a 4-column grid layout",
+        "Each pad is visually distinct (border, background color, label)",
+        "Pads are numbered or labeled 1-16 in row-major order",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Audio playback engine",
+      "description": "As a developer, I need a rodio-based audio engine that can load PCM/WAV audio into memory and play it back on demand.",
+      "acceptanceCriteria": [
+        "AudioEngine struct wraps a rodio OutputStream and Sink pool",
+        "play_sample(data: Arc<Vec<u8>>) method plays audio immediately",
+        "Multiple simultaneous sounds play without blocking (polyphony)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Sample assignment and pad triggering",
+      "description": "As a user, I want to load audio files onto pads and trigger them by clicking so that I can play sounds.",
+      "acceptanceCriteria": [
+        "Each pad slot holds an optional Arc<Vec<u8>> audio buffer",
+        "Clicking a pad with an assigned sample plays it immediately",
+        "Clicking a pad with no sample does nothing",
+        "Clicking an already-playing pad restarts the sample from the beginning",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Pad active state visual feedback",
+      "description": "As a user, I want pads to change color while their sample is playing so that I can see which pads are active.",
+      "acceptanceCriteria": [
+        "Pads show a distinct highlight color while their sample is playing",
+        "Pads return to default color when sample finishes or is stopped",
+        "Visual state updates within one frame of triggering",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Stop All button and Space key shortcut",
+      "description": "As a user, I want a Stop All button that immediately silences every playing sample so that I can cut all sound at once.",
+      "acceptanceCriteria": [
+        "Stop All button is visible in the UI",
+        "Clicking Stop All stops all currently playing samples immediately",
+        "Pressing Space key also triggers Stop All",
+        "All pad active states reset when Stop All fires",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Keyboard controls for pad triggering",
+      "description": "As a user, I want keyboard keys mapped to pads so that I can trigger sounds without using the mouse.",
+      "acceptanceCriteria": [
+        "Keys Q W E R map to pads 1-4 (top row)",
+        "Keys A S D F map to pads 5-8",
+        "Keys Z X C V map to pads 9-12",
+        "Keys 1 2 3 4 map to pads 13-16 (bottom row)",
+        "Keyboard triggers behave identically to mouse clicks (play/retrigger)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Microphone audio recording via cpal",
+      "description": "As a developer, I need a recording module that captures audio from the default input device and stores it as a PCM buffer.",
+      "acceptanceCriteria": [
+        "RecordingEngine starts/stops mic capture via cpal",
+        "Captured audio is collected into a Vec<u8> WAV-encoded buffer",
+        "Recording state is exposed as a boolean flag readable from the UI thread",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Sample recording UI: record button, indicator, pad assignment",
+      "description": "As a user, I want to record audio and assign it to a pad so that I can create my own samples.",
+      "acceptanceCriteria": [
+        "Record button (or R key) starts recording; pressing again stops it",
+        "Blinking red indicator is visible in the UI while recording is active",
+        "After stopping recording, the next pad clicked receives the recorded audio buffer",
+        "Assigned pad label or color updates to indicate it has a sample",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Long-press pad to remove sample",
+      "description": "As a user, I want to clear a pad's sample by holding it for 3 seconds so that I can reassign or free up pads.",
+      "acceptanceCriteria": [
+        "Holding down a pad for 3 seconds deletes its assigned sample",
+        "Visual feedback (e.g., progress fill or color shift) shown during hold",
+        "Releasing before 3 seconds cancels the clear",
+        "Cleared pad returns to empty state with no sample",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Loop/sequence recording engine",
+      "description": "As a developer, I need a sequencer that records pad IDs and their relative timestamps during a recording session.",
+      "acceptanceCriteria": [
+        "LoopRecorder struct records (pad_index, elapsed_ms) events",
+        "Start/stop controlled by L key and a UI button",
+        "Completed recordings stored in a Vec<Loop> with sequential names (loop#1, loop#2, ...)",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Loop list sidebar UI",
+      "description": "As a user, I want to see a list of recorded loops in the sidebar so that I can select and manage them.",
+      "acceptanceCriteria": [
+        "Sidebar panel displays all recorded loops by name (loop#1, loop#2, ...)",
+        "Clicking a loop in the list selects it as the active loop",
+        "Selected loop is visually highlighted",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Loop playback with original timing",
+      "description": "As a user, I want to play back a selected loop so that it replays pad presses with the original timing.",
+      "acceptanceCriteria": [
+        "P key and a Play button trigger playback of the selected loop",
+        "Pad presses fire at the recorded intervals (timing preserved)",
+        "Playback loops continuously until stopped",
+        "O key and a Stop button stops the selected loop",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Multiple simultaneous loop playback and independent stop",
+      "description": "As a user, I want to play multiple loops at the same time and stop each one independently.",
+      "acceptanceCriteria": [
+        "Multiple loops can run simultaneously without interfering",
+        "Each loop in the sidebar shows a playing indicator when active",
+        "Each loop has its own stop control in the list",
+        "Stopping one loop does not affect others",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
