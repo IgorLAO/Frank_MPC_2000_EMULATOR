@@ -73,6 +73,10 @@ impl MpcApp {
     }
 }
 
+const PAD_KEY_LABELS: [&str; 16] = [
+    "Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V", "1", "2", "3", "4",
+];
+
 impl eframe::App for MpcApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Collect pads to trigger (to avoid borrow issues)
@@ -83,6 +87,33 @@ impl eframe::App for MpcApp {
         if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
             stop_all = true;
         }
+
+        // Keyboard pad triggers
+        ctx.input(|i| {
+            let key_pad_map: [(egui::Key, usize); 16] = [
+                (egui::Key::Q, 0),
+                (egui::Key::W, 1),
+                (egui::Key::E, 2),
+                (egui::Key::R, 3),
+                (egui::Key::A, 4),
+                (egui::Key::S, 5),
+                (egui::Key::D, 6),
+                (egui::Key::F, 7),
+                (egui::Key::Z, 8),
+                (egui::Key::X, 9),
+                (egui::Key::C, 10),
+                (egui::Key::V, 11),
+                (egui::Key::Num1, 12),
+                (egui::Key::Num2, 13),
+                (egui::Key::Num3, 14),
+                (egui::Key::Num4, 15),
+            ];
+            for (key, pad_idx) in &key_pad_map {
+                if i.key_pressed(*key) {
+                    triggered.push(*pad_idx);
+                }
+            }
+        });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("MPC Emulator");
@@ -146,11 +177,18 @@ impl eframe::App for MpcApp {
                                 );
 
                                 painter.text(
-                                    rect.center(),
+                                    rect.center() - Vec2::new(0.0, 8.0),
+                                    egui::Align2::CENTER_CENTER,
+                                    PAD_KEY_LABELS[pad_idx],
+                                    egui::FontId::proportional(22.0),
+                                    Color32::WHITE,
+                                );
+                                painter.text(
+                                    rect.center() + Vec2::new(0.0, 14.0),
                                     egui::Align2::CENTER_CENTER,
                                     format!("{}", pad_num),
-                                    egui::FontId::proportional(20.0),
-                                    Color32::WHITE,
+                                    egui::FontId::proportional(13.0),
+                                    Color32::from_rgb(180, 180, 180),
                                 );
                             }
                         }
