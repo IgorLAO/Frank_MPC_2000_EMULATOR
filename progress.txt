@@ -1,3 +1,14 @@
+## 2026-04-03 - US-010
+- What was implemented: Long-press pad 3 seconds to clear its assigned sample. `pad_press_start: [Option<f64>; 16]` tracks press start time. `Sense::click_and_drag()` used instead of `Sense::click()` to detect ongoing pointer-down state via `response.is_pointer_button_down_on()`. Red progress bar fills at bottom of pad over 3s. Border/bg shift to red while holding. On completion, sample and sink are cleared; pad returns to empty state. Short clicks (<3s) still trigger normal behavior.
+- Files changed: src/main.rs
+- **Learnings for future iterations:**
+  - `Sense::click_and_drag()` needed (not `Sense::click()`) to get `is_pointer_button_down_on()` to work
+  - `response.is_pointer_button_down_on()` returns true while primary button is held over the widget
+  - Re-compute `has_sample` after long-press clearing (moved it after the clear block)
+  - `long_press_complete` guard on `response.clicked()` prevents accidental pad trigger after 3s hold
+  - `pad_press_start[idx] = None` must be set after clearing to reset progress bar next frame
+---
+
 ## 2026-04-03 - US-009
 - What was implemented: Record button ("⏺ Record (R)") in UI toolbar toggles recording start/stop. R key also toggles. Blinking red dot indicator shown while recording. After stopping, a yellow hint message prompts user to click a pad to assign the buffer. Clicking a pad during pending-assign mode stores the WAV buffer and shows a filled dot (●) in the pad label. Pads with pending assignment show a blue border highlight.
 - Files changed: src/main.rs
