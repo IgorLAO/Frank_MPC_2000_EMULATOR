@@ -29,6 +29,8 @@ struct MpcApp {
     /// Per-pad sink for restart semantics
     pad_sinks: Vec<Option<Sink>>,
     recorder: RecordingEngine,
+    /// Buffer from the last completed recording, waiting to be assigned to a pad
+    pending_record_buffer: Option<Arc<Vec<u8>>>,
 }
 
 impl MpcApp {
@@ -40,6 +42,7 @@ impl MpcApp {
             pad_samples: Default::default(),
             pad_sinks,
             recorder: RecordingEngine::new(),
+            pending_record_buffer: None,
         }
     }
 
@@ -78,7 +81,7 @@ impl MpcApp {
 }
 
 const PAD_KEY_LABELS: [&str; 16] = [
-    "Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V", "1", "2", "3", "4",
+    "Q", "W", "E", "-", "A", "S", "D", "F", "Z", "X", "C", "V", "1", "2", "3", "4",
 ];
 
 impl eframe::App for MpcApp {
@@ -86,19 +89,24 @@ impl eframe::App for MpcApp {
         // Collect pads to trigger (to avoid borrow issues)
         let mut triggered: Vec<usize> = Vec::new();
         let mut stop_all = false;
+        let mut toggle_record = false;
 
         // Space key triggers Stop All
         if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
             stop_all = true;
         }
 
-        // Keyboard pad triggers
+        // R key toggles recording (takes priority over pad trigger)
+        if ctx.input(|i| i.key_pressed(egui::Key::R)) {
+            toggle_record = true;
+        }
+
+        // Keyboard pad triggers (R removed — used for recording)
         ctx.input(|i| {
-            let key_pad_map: [(egui::Key, usize); 16] = [
+            let key_pad_map: [(egui::Key, usize); 15] = [
                 (egui::Key::Q, 0),
                 (egui::Key::W, 1),
                 (egui::Key::E, 2),
-                (egui::Key::R, 3),
                 (egui::Key::A, 4),
                 (egui::Key::S, 5),
                 (egui::Key::D, 6),
@@ -123,16 +131,64 @@ impl eframe::App for MpcApp {
             ui.heading("MPC Emulator");
             ui.add_space(8.0);
 
-            if ui
-                .add(
-                    egui::Button::new("■  Stop All")
-                        .fill(Color32::from_rgb(160, 40, 40))
-                        .min_size(Vec2::new(120.0, 32.0)),
-                )
-                .clicked()
-            {
-                stop_all = true;
-            }
+            ui.horizontal(|ui| {
+                if ui
+                    .add(
+                        egui::Button::new("■  Stop All")
+                            .fill(Color32::from_rgb(160, 40, 40))
+                            .min_size(Vec2::new(120.0, 32.0)),
+                    )
+                    .clicked()
+                {
+                    stop_all = true;
+                }
+
+                ui.add_space(12.0);
+
+                let is_recording = self.recorder.is_recording();
+                let rec_label = if is_recording { "⏹  Stop Rec" } else { "⏺  Record (R)" };
+                let rec_color = if is_recording {
+                    Color32::from_rgb(180, 50, 50)
+                } else {
+                    Color32::from_rgb(100, 100, 100)
+                };
+                if ui
+                    .add(
+                        egui::Button::new(rec_label)
+                            .fill(rec_color)
+                            .min_size(Vec2::new(140.0, 32.0)),
+                    )
+                    .clicked()
+                {
+                    toggle_record = true;
+                }
+
+                // Blinking red indicator while recording
+                if is_recording {
+                    let t = ctx.input(|i| i.time);
+                    let blink_on = (t * 2.0) as u64 % 2 == 0;
+                    if blink_on {
+                        let (dot_rect, _) =
+                            ui.allocate_exact_size(Vec2::new(16.0, 16.0), egui::Sense::hover());
+                        ui.painter().circle_filled(
+                            dot_rect.center(),
+                            8.0,
+                            Color32::from_rgb(255, 50, 50),
+                        );
+                    } else {
+                        ui.add_space(16.0);
+                    }
+                }
+
+                // Show "assign to pad" hint when a buffer is waiting
+                if self.pending_record_buffer.is_some() {
+                    ui.add_space(8.0);
+                    ui.colored_label(
+                        Color32::from_rgb(255, 220, 80),
+                        "Click a pad to assign recording",
+                    );
+                }
+            });
 
             ui.add_space(8.0);
 
@@ -149,17 +205,27 @@ impl eframe::App for MpcApp {
                             let pad_num = pad_idx + 1;
                             let has_sample = self.pad_samples[pad_idx].is_some();
                             let is_playing = self.is_pad_playing(pad_idx);
+                            let pending_assign = self.pending_record_buffer.is_some();
 
                             let (rect, response) =
                                 ui.allocate_exact_size(pad_size, egui::Sense::click());
 
                             if response.clicked() {
-                                triggered.push(pad_idx);
+                                if pending_assign {
+                                    // Assign recorded buffer to this pad
+                                    if let Some(buf) = self.pending_record_buffer.take() {
+                                        self.pad_samples[pad_idx] = Some(buf);
+                                    }
+                                } else {
+                                    triggered.push(pad_idx);
+                                }
                             }
 
                             if ui.is_rect_visible(rect) {
                                 let bg_color = if is_playing {
                                     Color32::from_rgb(200, 160, 40) // bright highlight while playing
+                                } else if pending_assign && !has_sample {
+                                    Color32::from_rgb(40, 60, 100) // assignable empty pad hint
                                 } else if has_sample {
                                     Color32::from_rgb(60, 80, 60)
                                 } else {
@@ -167,6 +233,8 @@ impl eframe::App for MpcApp {
                                 };
                                 let border_color = if is_playing {
                                     Color32::from_rgb(255, 220, 80)
+                                } else if pending_assign {
+                                    Color32::from_rgb(100, 160, 255)
                                 } else {
                                     Color32::from_rgb(120, 120, 160)
                                 };
@@ -187,10 +255,15 @@ impl eframe::App for MpcApp {
                                     egui::FontId::proportional(22.0),
                                     Color32::WHITE,
                                 );
+                                let pad_label = if has_sample {
+                                    format!("{} ●", pad_num)
+                                } else {
+                                    format!("{}", pad_num)
+                                };
                                 painter.text(
                                     rect.center() + Vec2::new(0.0, 14.0),
                                     egui::Align2::CENTER_CENTER,
-                                    format!("{}", pad_num),
+                                    pad_label,
                                     egui::FontId::proportional(13.0),
                                     Color32::from_rgb(180, 180, 180),
                                 );
@@ -200,6 +273,17 @@ impl eframe::App for MpcApp {
                     }
                 });
         });
+
+        if toggle_record {
+            if self.recorder.is_recording() {
+                let wav = self.recorder.stop();
+                if !wav.is_empty() {
+                    self.pending_record_buffer = Some(Arc::new(wav));
+                }
+            } else {
+                self.recorder.start();
+            }
+        }
 
         if stop_all {
             self.stop_all();
