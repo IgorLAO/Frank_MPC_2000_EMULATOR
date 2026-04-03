@@ -1,3 +1,13 @@
+## 2026-04-03 - US-012
+- What was implemented: Right sidebar panel "Loops" showing all recorded loops as clickable buttons. `selected_loop: Option<usize>` field on MpcApp tracks active selection. `egui::SidePanel::right("loop_sidebar")` renders before CentralPanel. Selected loop highlighted with blue bg (Color32::from_rgb(60,120,200)); unselected loops use dark bg. Empty state shows grey "No loops recorded" label. ScrollArea wraps list for many loops.
+- Files changed: src/main.rs
+- **Learnings for future iterations:**
+  - `egui::SidePanel::right(id)` must be added BEFORE `CentralPanel::default()` to render correctly
+  - `ui.available_width()` inside SidePanel gives remaining width for full-width buttons
+  - `self.selected_loop` stores loop index; validate against `loops.len()` before using in US-013/014
+  - Loop names accessible via `self.loop_recorder.loops[idx].name`
+---
+
 ## 2026-04-03 - US-011
 - What was implemented: `LoopRecorder` struct in `src/loop_recorder.rs` — records `(pad_index, elapsed_ms)` events using `std::time::Instant` for timing. `start()` begins capture, `stop()` finalizes a named `Loop` (loop#1, loop#2, ...) and pushes to `self.loops`. `record_event(pad_idx)` called from `main.rs` whenever a pad is triggered. L key and "Loop Rec (L)" button toggle loop recording. Blinking blue indicator shown while loop recording is active. Events recorded for both keyboard and mouse pad triggers.
 - Files changed: src/loop_recorder.rs (new), src/main.rs
