@@ -357,6 +357,7 @@ impl eframe::App for MpcApp {
                     .selected_mic_device
                     .as_deref()
                     .unwrap_or("System Default");
+                let is_recording = self.recorder.is_recording();
                 egui::ComboBox::from_id_salt("mic_device_select")
                     .selected_text(selected_label)
                     .width(260.0)
@@ -376,11 +377,22 @@ impl eframe::App for MpcApp {
                         }
                     });
                 if ui
-                    .button("↺")
+                    .add_enabled(!is_recording, egui::Button::new("↺"))
                     .on_hover_text("Refresh device list")
                     .clicked()
                 {
                     self.available_mic_devices = list_input_devices();
+                }
+                // Show which device is actually capturing when recording is active
+                if is_recording {
+                    let active = self
+                        .recorder
+                        .active_device()
+                        .unwrap_or("System Default");
+                    ui.colored_label(
+                        Color32::from_rgb(255, 180, 80),
+                        format!("● {active}"),
+                    );
                 }
             });
 
@@ -526,7 +538,11 @@ impl eframe::App for MpcApp {
                     self.pending_record_buffer = Some(Arc::new(wav));
                 }
             } else {
-                self.recorder.start(self.selected_mic_device.as_deref());
+                let started = self.recorder.start(self.selected_mic_device.as_deref());
+                if !started {
+                    // Selected device unavailable — try system default
+                    self.recorder.start(None);
+                }
             }
         }
 
@@ -554,21 +570,29 @@ impl eframe::App for MpcApp {
             }
         }
 
-        // Tick loop playback: fire any events whose timestamp has been reached
+        // Tick loop playback: fire any events whose timestamp has been reached,
+        // then loop back continuously using the recorded duration for precise timing.
         let mut loop_triggered: Vec<usize> = Vec::new();
         let mut playback_done = false;
         if let Some(pb) = &mut self.loop_playback {
             if pb.loop_idx < self.loop_recorder.loops.len() {
-                let elapsed_ms = pb.start.elapsed().as_millis() as u64;
                 let lp = &self.loop_recorder.loops[pb.loop_idx];
-                while pb.next_event_idx < lp.events.len()
-                    && lp.events[pb.next_event_idx].elapsed_ms <= elapsed_ms
-                {
-                    loop_triggered.push(lp.events[pb.next_event_idx].pad_index);
-                    pb.next_event_idx += 1;
-                }
-                if pb.next_event_idx >= lp.events.len() {
+                if lp.events.is_empty() || lp.duration_ms == 0 {
                     playback_done = true;
+                } else {
+                    let elapsed_ms = pb.start.elapsed().as_millis() as u64;
+                    while pb.next_event_idx < lp.events.len()
+                        && lp.events[pb.next_event_idx].elapsed_ms <= elapsed_ms
+                    {
+                        loop_triggered.push(lp.events[pb.next_event_idx].pad_index);
+                        pb.next_event_idx += 1;
+                    }
+                    // All events consumed — restart for next iteration
+                    if pb.next_event_idx >= lp.events.len() {
+                        pb.start = pb.start
+                            + std::time::Duration::from_millis(lp.duration_ms);
+                        pb.next_event_idx = 0;
+                    }
                 }
             } else {
                 playback_done = true;

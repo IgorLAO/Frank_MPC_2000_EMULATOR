@@ -8,6 +8,8 @@ pub struct LoopEvent {
 pub struct Loop {
     pub name: String,
     pub events: Vec<LoopEvent>,
+    /// Total recorded duration in ms; used to keep loopback timing precise.
+    pub duration_ms: u64,
 }
 
 pub struct LoopRecorder {
@@ -40,8 +42,12 @@ impl LoopRecorder {
         self.is_recording = false;
         let loop_num = self.loops.len() + 1;
         let name = format!("loop#{}", loop_num);
+        let duration_ms = self
+            .start_time
+            .map(|t| t.elapsed().as_millis() as u64)
+            .unwrap_or(0);
         let events = std::mem::take(&mut self.current_events);
-        self.loops.push(Loop { name, events });
+        self.loops.push(Loop { name, events, duration_ms });
         self.start_time = None;
     }
 

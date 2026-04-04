@@ -18,6 +18,8 @@ pub struct RecordingEngine {
     sample_rate: u32,
     channels: u16,
     _stream: Option<cpal::Stream>,
+    /// Name of the device currently (or last) used for recording.
+    active_device: Option<String>,
 }
 
 impl RecordingEngine {
@@ -28,7 +30,14 @@ impl RecordingEngine {
             sample_rate: 44100,
             channels: 1,
             _stream: None,
+            active_device: None,
         }
+    }
+
+    /// Name of the device that was actually used when recording started.
+    /// Returns `None` if no recording has been started yet.
+    pub fn active_device(&self) -> Option<&str> {
+        self.active_device.as_deref()
     }
 
     /// Returns true if currently recording.
@@ -37,22 +46,27 @@ impl RecordingEngine {
     }
 
     /// Start capturing from the named input device, or the default if `device_name` is `None`.
-    /// Returns false if no suitable device is available.
+    /// Returns false if the requested device is not found or capture cannot start.
     pub fn start(&mut self, device_name: Option<&str>) -> bool {
         let host = cpal::default_host();
         let device = if let Some(name) = device_name {
-            // Try to find the named device; fall back to default.
-            host.input_devices()
+            // Use exactly the requested device — no silent fallback.
+            match host
+                .input_devices()
                 .ok()
                 .and_then(|mut devs| devs.find(|d| d.name().ok().as_deref() == Some(name)))
-                .or_else(|| host.default_input_device())
+            {
+                Some(d) => d,
+                None => return false,
+            }
         } else {
-            host.default_input_device()
+            match host.default_input_device() {
+                Some(d) => d,
+                None => return false,
+            }
         };
-        let device = match device {
-            Some(d) => d,
-            None => return false,
-        };
+
+        let device_name_actual = device.name().ok();
         let supported_config = match device.default_input_config() {
             Ok(c) => c,
             Err(_) => return false,
@@ -119,6 +133,7 @@ impl RecordingEngine {
                 }
                 self.is_recording.store(true, Ordering::Relaxed);
                 self._stream = Some(s);
+                self.active_device = device_name_actual;
                 true
             }
             Err(_) => false,
