@@ -4,6 +4,14 @@ use std::sync::{
     Arc, Mutex,
 };
 
+/// Returns the names of all available input devices on the default host.
+pub fn list_input_devices() -> Vec<String> {
+    let host = cpal::default_host();
+    host.input_devices()
+        .map(|devices| devices.filter_map(|d| d.name().ok()).collect())
+        .unwrap_or_default()
+}
+
 pub struct RecordingEngine {
     is_recording: Arc<AtomicBool>,
     samples: Arc<Mutex<Vec<f32>>>,
@@ -28,10 +36,20 @@ impl RecordingEngine {
         self.is_recording.load(Ordering::Relaxed)
     }
 
-    /// Start capturing from the default input device. Returns false if unavailable.
-    pub fn start(&mut self) -> bool {
+    /// Start capturing from the named input device, or the default if `device_name` is `None`.
+    /// Returns false if no suitable device is available.
+    pub fn start(&mut self, device_name: Option<&str>) -> bool {
         let host = cpal::default_host();
-        let device = match host.default_input_device() {
+        let device = if let Some(name) = device_name {
+            // Try to find the named device; fall back to default.
+            host.input_devices()
+                .ok()
+                .and_then(|mut devs| devs.find(|d| d.name().ok().as_deref() == Some(name)))
+                .or_else(|| host.default_input_device())
+        } else {
+            host.default_input_device()
+        };
+        let device = match device {
             Some(d) => d,
             None => return false,
         };

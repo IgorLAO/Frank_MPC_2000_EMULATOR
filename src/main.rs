@@ -4,11 +4,18 @@ mod recording;
 
 use audio::AudioEngine;
 use loop_recorder::LoopRecorder;
-use recording::RecordingEngine;
+use recording::{list_input_devices, RecordingEngine};
 use eframe::egui;
 use egui::{Color32, CornerRadius, Stroke, StrokeKind, Vec2};
 use rodio::Sink;
 use std::sync::Arc;
+use std::time::Instant;
+
+struct LoopPlayback {
+    loop_idx: usize,
+    start: Instant,
+    next_event_idx: usize,
+}
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
@@ -38,6 +45,12 @@ struct MpcApp {
     loop_recorder: LoopRecorder,
     /// Index of the currently selected loop in loop_recorder.loops
     selected_loop: Option<usize>,
+    /// Active loop playback state (None = not playing)
+    loop_playback: Option<LoopPlayback>,
+    /// Available mic input device names (populated at startup)
+    available_mic_devices: Vec<String>,
+    /// Selected mic device name (None = use system default)
+    selected_mic_device: Option<String>,
 }
 
 impl MpcApp {
@@ -53,6 +66,9 @@ impl MpcApp {
             pad_press_start: [None; 16],
             loop_recorder: LoopRecorder::new(),
             selected_loop: None,
+            loop_playback: None,
+            available_mic_devices: list_input_devices(),
+            selected_mic_device: None,
         }
     }
 
@@ -101,6 +117,8 @@ impl eframe::App for MpcApp {
         let mut stop_all = false;
         let mut toggle_record = false;
         let mut toggle_loop_record = false;
+        let mut play_loop = false;
+        let mut stop_loop = false;
 
         // Space key triggers Stop All
         if ctx.input(|i| i.key_pressed(egui::Key::Space)) {
@@ -115,6 +133,16 @@ impl eframe::App for MpcApp {
         // L key toggles loop recording
         if ctx.input(|i| i.key_pressed(egui::Key::L)) {
             toggle_loop_record = true;
+        }
+
+        // P key plays selected loop
+        if ctx.input(|i| i.key_pressed(egui::Key::P)) {
+            play_loop = true;
+        }
+
+        // O key stops loop playback
+        if ctx.input(|i| i.key_pressed(egui::Key::O)) {
+            stop_loop = true;
         }
 
         // Keyboard pad triggers (R removed — used for recording)
@@ -152,25 +180,68 @@ impl eframe::App for MpcApp {
                 if self.loop_recorder.loops.is_empty() {
                     ui.colored_label(Color32::from_rgb(140, 140, 140), "No loops recorded");
                 } else {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        for (idx, lp) in self.loop_recorder.loops.iter().enumerate() {
-                            let is_selected = self.selected_loop == Some(idx);
-                            let bg = if is_selected {
-                                Color32::from_rgb(60, 120, 200)
-                            } else {
-                                Color32::from_rgb(50, 50, 70)
-                            };
-                            let response = ui.add(
-                                egui::Button::new(&lp.name)
-                                    .fill(bg)
-                                    .min_size(Vec2::new(ui.available_width(), 28.0)),
-                            );
-                            if response.clicked() {
-                                self.selected_loop = Some(idx);
+                    egui::ScrollArea::vertical()
+                        .max_height(ui.available_height() - 70.0)
+                        .show(ui, |ui| {
+                            for (idx, lp) in self.loop_recorder.loops.iter().enumerate() {
+                                let is_selected = self.selected_loop == Some(idx);
+                                let is_playing = self.loop_playback.as_ref().map_or(false, |p| p.loop_idx == idx);
+                                let bg = if is_playing {
+                                    Color32::from_rgb(40, 140, 80)
+                                } else if is_selected {
+                                    Color32::from_rgb(60, 120, 200)
+                                } else {
+                                    Color32::from_rgb(50, 50, 70)
+                                };
+                                let label = if is_playing {
+                                    format!("▶ {}", lp.name)
+                                } else {
+                                    lp.name.clone()
+                                };
+                                let response = ui.add(
+                                    egui::Button::new(label)
+                                        .fill(bg)
+                                        .min_size(Vec2::new(ui.available_width(), 28.0)),
+                                );
+                                if response.clicked() {
+                                    self.selected_loop = Some(idx);
+                                }
                             }
-                        }
-                    });
+                        });
                 }
+
+                ui.add_space(4.0);
+                ui.separator();
+                ui.add_space(4.0);
+
+                let can_play = self.selected_loop
+                    .map_or(false, |idx| idx < self.loop_recorder.loops.len());
+                let is_playing = self.loop_playback.is_some();
+
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(
+                            can_play,
+                            egui::Button::new("▶ Play (P)")
+                                .fill(Color32::from_rgb(40, 120, 60))
+                                .min_size(Vec2::new(80.0, 28.0)),
+                        )
+                        .clicked()
+                    {
+                        play_loop = true;
+                    }
+                    if ui
+                        .add_enabled(
+                            is_playing,
+                            egui::Button::new("■ Stop (O)")
+                                .fill(Color32::from_rgb(120, 50, 50))
+                                .min_size(Vec2::new(72.0, 28.0)),
+                        )
+                        .clicked()
+                    {
+                        stop_loop = true;
+                    }
+                });
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -277,7 +348,43 @@ impl eframe::App for MpcApp {
                 }
             });
 
-            ui.add_space(8.0);
+            ui.add_space(4.0);
+
+            // Mic device selector row
+            ui.horizontal(|ui| {
+                ui.label("Mic device:");
+                let selected_label = self
+                    .selected_mic_device
+                    .as_deref()
+                    .unwrap_or("System Default");
+                egui::ComboBox::from_id_salt("mic_device_select")
+                    .selected_text(selected_label)
+                    .width(260.0)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.selected_mic_device,
+                            None,
+                            "System Default",
+                        );
+                        for name in self.available_mic_devices.clone() {
+                            let label = name.clone();
+                            ui.selectable_value(
+                                &mut self.selected_mic_device,
+                                Some(name),
+                                label,
+                            );
+                        }
+                    });
+                if ui
+                    .button("↺")
+                    .on_hover_text("Refresh device list")
+                    .clicked()
+                {
+                    self.available_mic_devices = list_input_devices();
+                }
+            });
+
+            ui.add_space(4.0);
 
             let pad_size = Vec2::new(100.0, 100.0);
             let spacing = 8.0;
@@ -419,7 +526,7 @@ impl eframe::App for MpcApp {
                     self.pending_record_buffer = Some(Arc::new(wav));
                 }
             } else {
-                self.recorder.start();
+                self.recorder.start(self.selected_mic_device.as_deref());
             }
         }
 
@@ -431,8 +538,52 @@ impl eframe::App for MpcApp {
             }
         }
 
+        if stop_loop {
+            self.loop_playback = None;
+        }
+
+        if play_loop {
+            if let Some(idx) = self.selected_loop {
+                if idx < self.loop_recorder.loops.len() {
+                    self.loop_playback = Some(LoopPlayback {
+                        loop_idx: idx,
+                        start: Instant::now(),
+                        next_event_idx: 0,
+                    });
+                }
+            }
+        }
+
+        // Tick loop playback: fire any events whose timestamp has been reached
+        let mut loop_triggered: Vec<usize> = Vec::new();
+        let mut playback_done = false;
+        if let Some(pb) = &mut self.loop_playback {
+            if pb.loop_idx < self.loop_recorder.loops.len() {
+                let elapsed_ms = pb.start.elapsed().as_millis() as u64;
+                let lp = &self.loop_recorder.loops[pb.loop_idx];
+                while pb.next_event_idx < lp.events.len()
+                    && lp.events[pb.next_event_idx].elapsed_ms <= elapsed_ms
+                {
+                    loop_triggered.push(lp.events[pb.next_event_idx].pad_index);
+                    pb.next_event_idx += 1;
+                }
+                if pb.next_event_idx >= lp.events.len() {
+                    playback_done = true;
+                }
+            } else {
+                playback_done = true;
+            }
+        }
+        if playback_done {
+            self.loop_playback = None;
+        }
+        for pad_idx in loop_triggered {
+            self.trigger_pad(pad_idx);
+        }
+
         if stop_all {
             self.stop_all();
+            self.loop_playback = None;
         } else {
             for pad_idx in triggered {
                 self.loop_recorder.record_event(pad_idx);
