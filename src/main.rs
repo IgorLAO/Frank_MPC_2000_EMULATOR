@@ -57,11 +57,13 @@ impl MpcApp {
     fn new() -> Self {
         let audio = AudioEngine::new();
         let pad_sinks = (0..16).map(|_| None).collect();
+        let mut recorder = RecordingEngine::new();
+        recorder.open(None); // open default mic stream at startup
         MpcApp {
             audio,
             pad_samples: Default::default(),
             pad_sinks,
-            recorder: RecordingEngine::new(),
+            recorder,
             pending_record_buffer: None,
             pad_press_start: [None; 16],
             loop_recorder: LoopRecorder::new(),
@@ -358,6 +360,7 @@ impl eframe::App for MpcApp {
                     .as_deref()
                     .unwrap_or("System Default");
                 let is_recording = self.recorder.is_recording();
+                let prev_selection = self.selected_mic_device.clone();
                 egui::ComboBox::from_id_salt("mic_device_select")
                     .selected_text(selected_label)
                     .width(260.0)
@@ -376,6 +379,10 @@ impl eframe::App for MpcApp {
                             );
                         }
                     });
+                // Reopen stream immediately when device selection changes
+                if self.selected_mic_device != prev_selection && !is_recording {
+                    self.recorder.open(self.selected_mic_device.as_deref());
+                }
                 if ui
                     .add_enabled(!is_recording, egui::Button::new("↺"))
                     .on_hover_text("Refresh device list")
@@ -383,17 +390,19 @@ impl eframe::App for MpcApp {
                 {
                     self.available_mic_devices = list_input_devices();
                 }
-                // Show which device is actually capturing when recording is active
-                if is_recording {
-                    let active = self
-                        .recorder
-                        .active_device()
-                        .unwrap_or("System Default");
-                    ui.colored_label(
-                        Color32::from_rgb(255, 180, 80),
-                        format!("● {active}"),
-                    );
-                }
+                // Show which device the stream is open on
+                let active = self.recorder.active_device().unwrap_or("none");
+                let status_color = if is_recording {
+                    Color32::from_rgb(255, 100, 100)
+                } else {
+                    Color32::from_rgb(120, 180, 120)
+                };
+                let status_label = if is_recording {
+                    format!("● REC  {active}")
+                } else {
+                    format!("○  {active}")
+                };
+                ui.colored_label(status_color, status_label);
             });
 
             ui.add_space(4.0);
@@ -538,11 +547,7 @@ impl eframe::App for MpcApp {
                     self.pending_record_buffer = Some(Arc::new(wav));
                 }
             } else {
-                let started = self.recorder.start(self.selected_mic_device.as_deref());
-                if !started {
-                    // Selected device unavailable — try system default
-                    self.recorder.start(None);
-                }
+                self.recorder.start();
             }
         }
 
